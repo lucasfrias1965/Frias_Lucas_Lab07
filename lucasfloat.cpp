@@ -18,7 +18,7 @@ typedef struct {
 } ResultType;
 
 static inline lucas_number unpack_result_type(ResultType rt){
-    if (rt.error) exit(1); 
+    if (rt.error){printf("ERR, could not unpack"); exit(1);}
     else return rt.value;
 }
 
@@ -30,7 +30,7 @@ ResultType make_lucas_number(char * c_str){
     //a tryhard with too much time on his hands
     ResultType nothing_error = {lucas_number{0,0}, true};
     //quick check
-    if (*c_str == '\0') return nothing_error;
+    if (*c_str == '\0') {printf("ERR: nullstr");return nothing_error;}
  
     //the first thing we must do is get the sign!!
     //the sign is defined as the value that the string is in
@@ -80,7 +80,6 @@ ResultType make_lucas_number(char * c_str){
     //is the string interger-esque? we can't know that it IS an
     //integer, but this decides what path we should take
     bool string_seems_inty = !found_period;
-
     if (string_seems_inty){
         //this is an integer validation/handling code let's parse it
         //first, let's make sure all chars are '0' - '9'
@@ -89,7 +88,7 @@ ResultType make_lucas_number(char * c_str){
         //holy hideous one liner -> basically, what this does is inits a pointer which we increment and validate that
         //only integer types are actually returned so we're gonna validate whether this is okay
     
-        for (char * num_check = c_str; *num_check != '\0'; num_check++) if ( !('0' >= *num_check && '9' <= *num_check) ) return nothing_error;
+        for (char * num_check = c_str; *num_check != '\0'; num_check++) if ( !('0' <= *num_check && '9' >= *num_check) ) { printf("ERR: char %c is not a valid number", *num_check);return nothing_error;}
     
         //okay so now we validated it's like at least a number
         //so let's calculate it!!!
@@ -99,12 +98,15 @@ ResultType make_lucas_number(char * c_str){
         //if we have a + or - and remove 1 from that 
          
         const size_t number_size = (*c_str != '+' || *c_str != '-') ? strlen(c_str) : strlen(c_str)-1;
-        
+
         //make our lucas number
         lucas_number integer_result = {0, true};
 
-        for (size_t i = number_size; i >= 0; i--, c_str++) integer_result.value += pow (10, i) * (*c_str - '0');
-        
+       	for (size_t i = number_size; *c_str != '\0'; i--){
+		integer_result.value += pow(10, i-1) * (*c_str - '0');
+		c_str++;
+	}
+
         return ResultType{integer_result, false};
 
     }    
