@@ -1,0 +1,213 @@
+BUG REPORT: lucasfloat.cpp
+===========================
+
+0. COMPILE ERRORS (nothing below matters until these are fixed)
+-----------------------------------------------------------------
+- Line 151: `if (strcmp(c_str, "+0"){` — missing closing ')' for strcmp call.
+  Also missing a comparison (see #3).
+- Line 154: `if (strcmp(c_str, "-0"){` — same missing ')'.
+- Line 159: `return ResultType{ lucas_number {2048 << 52 | 1, false}, true}` —
+  missing trailing ';'.
+
+Confirmed via: g++ -std=c++17 -Wall -Wextra -c lucasfloat.cpp
+  error: expected ')' before '{' token (line 152)
+  error: expected '}' at end of input (line 202)
+  warning: left shift count >= width of type (lines 146, 149) -- see #4
+
+
+1. SPECIAL-VALUE BLOCK (inf / -inf / +0 / -0 / NaN) IS UNREACHABLE
+-----------------------------------------------------------------
+Line 89: `bool string_seems_inty = !found_period;`
+
+None of "inf", "-inf", "NaN", "+0", "-0" contain a '.', so found_period is
+false for all of them, so string_seems_inty is TRUE, so every single one of
+these strings gets routed into the INTEGER branch (lines 90-126), never the
+float/"else" branch (lines 127-201) where the special-case handling lives.
+In the integer branch they fail the digit check ('i'/'n'/'f'/'N'/'a' are not
+'0'-'9') and just print "ERR: char X is not a valid number".
+
+The entire inf/-inf/+0/-0/NaN block (lines 144-160) is dead code as written.
+Fix direction: check for these literal strings BEFORE deciding
+string_seems_inty / before branching on found_period, not after.
+
+
+2. SIGN-CHECK LOOP RE-READS THE SIGN CHARACTER IT JUST CONSUMED
+-----------------------------------------------------------------
+Lines 48-61: switch on *sign_check_ptr reads the first char ('+' or '-')
+and sets is_positive, but never advances sign_check_ptr.
+
+Lines 68-85: the validation for-loop starts at
+`sign_check_ptr = c_str` (line 48) — i.e. the SAME position, position 0.
+So the very first iteration sees the sign char again and hits:
+  case '+': printf("ERR: ... extra +"); return nothing_error;
+  case '-': printf("ERR: ... extra +"); return nothing_error;
+
+Result: ANY string that starts with '+' or '-' is rejected with a bogus
+"extra +" error, including "-5", "+5", "-3.14", "-inf", "+0", "-0".
+This is a second, independent reason "-inf"/"+0"/"-0" never work, and it
+also breaks ordinary negative numbers that have nothing to do with the
+special-value logic.
+Fix direction: advance the pointer past the sign before starting the
+validation loop (or start the loop at c_str+1 when a sign was found).
+
+
+3. strcmp MISUSE (three separate bugs)
+-----------------------------------------------------------------
+- Line 144: `strcmp(c_str, "inf") >= 0`
+- Line 147: `strcmp(c_str, "-inf") >= 0`
+  strcmp returns 0 only on equality; ">=0" means "equal OR
+  lexicographically greater", not "equal". Any string that sorts after
+  "inf"/"-inf" (e.g. "zzz", "iof") would incorrectly match.
+  Concrete failure: strcmp("NaN", "-inf") > 0 (since 'N' > '-' in ASCII),
+  so the string "NaN" matches the "-inf" branch before it ever reaches the
+  NaN check on line 157.
+
+- Line 157: `if (strcmp(c_str, "NaN")){`
+  No comparison operator at all — this just tests truthiness of strcmp's
+  int return value. strcmp returns 0 (false) when the strings ARE equal,
+  and non-zero (true) otherwise. So this branch executes for every string
+  that is NOT "NaN", and is skipped for the one string that IS "NaN".
+  The condition is inverted.
+
+Fix direction: use `strcmp(c_str, "inf") == 0` etc. for all three.
+
+
+4. BROKEN / UNDEFINED-BEHAVIOR BIT PATTERNS FOR inf/-inf/NaN
+-----------------------------------------------------------------
+Lines 145, 148, 159:
+  2048 << 52 | 0 << 63
+  (2048 << 52) | 1 << 63
+  2048 << 52 | 1
+
+Two separate problems:
+a) `2048`, `0`, `1` are plain `int` literals (32-bit). Shifting by 52 or 63
+   is a shift-count >= width-of-type, which is UNDEFINED BEHAVIOR in C++.
+   Confirmed by compiler warning:
+     "left shift count >= width of type [-Wshift-count-overflow]"
+   Needs to be done in uint64_t, e.g. `2047ULL << 52`, `1ULL << 63`.
+
+b) Off-by-one even ignoring UB: IEEE-754 double has an 11-bit exponent
+   field; all-ones (used for inf/NaN) is 2047 (0x7FF), NOT 2048. 2048
+   (0x800) is 12 bits wide and would actually collide with/land on the
+   sign bit (bit 63) once correctly widened, producing garbage instead of
+   infinity.
+
+
+5. ERROR FLAG IS INVERTED FOR SUCCESSFUL RESULTS
+-----------------------------------------------------------------
+- Lines 145, 148, 152, 155, 159: all five special-value returns use
+  `ResultType{ ..., true }` — i.e. error = true for a *successful*
+  recognition of inf/-inf/+0/-0/NaN.
+- Line 198: the normal float-parse success path also returns
+  `ResultType{float_res, true}` (error = true) for an ordinary number
+  like "3.14".
+- Contrast with the integer path (line 124): correctly uses
+  `ResultType{integer_result, false}` (error = false) for success.
+
+unpack_result_type (line 23-26) exits the program via exit(1) whenever
+error is true. So even after fixing everything else, successfully parsing
+"inf" or "3.14" would still abort the program instead of returning the
+value. error should be false on all of these success paths.
+
+
+6. DECIMAL POINT IS TRACKED BUT NEVER APPLIED TO THE RESULT
+-----------------------------------------------------------------
+Lines 139, 171, 175-194.
+
+`fact` starts at 1 (or -1 for a negative number, line 171), then inside the
+parse loop (line 190) gets divided by 10 for every digit seen after the
+decimal point — but `res` is built unconditionally on EVERY digit, before
+and after the point, via:
+    res = res * 10.0f + (double) num_part;
+`fact` is never multiplied back into `res` anywhere. So:
+  - "3.14" computes res = 314 (digits just concatenated), not 3.14.
+    The decimal point has no effect on the final value.
+  - fact doubles as both "sign multiplier" and "fractional scale", but
+    neither use is ever actually applied to res, so negative floats also
+    silently lose their sign (compare: the integer path doesn't even
+    attempt a sign in the first place because of bug #2).
+
+Fix direction: either scale each digit by the current place value as you
+go, or multiply the final integer-digit accumulation by fact once at the
+end — and apply sign separately from fractional scaling, they're two
+different things sharing one variable right now.
+
+
+7. double -> uint64_t IS A NUMERIC CAST, NOT A BIT-PATTERN COPY
+-----------------------------------------------------------------
+Line 196: `float_res.value = res;`
+
+res is a double holding the parsed decimal value (e.g. 3.14, or 314 given
+bug #6). Assigning it to a uint64_t field does an ordinary numeric
+conversion (truncates toward zero: 3.14 -> 3), NOT a reinterpretation of
+the double's IEEE-754 bit layout. Given the stated goal of the exercise is
+to hand-roll IEEE-754 double storage, this throws away the entire point:
+nothing in lucas_number.value ever holds an actual IEEE-754 bit pattern
+for a general parsed float, only for the hand-coded inf/-inf/NaN special
+cases (which are themselves broken, see #4).
+
+Fix direction: reinterpret the bits, don't convert the value, e.g.:
+    memcpy(&float_res.value, &res, sizeof(double));
+  or (C++20): std::bit_cast<uint64_t>(res)
+
+
+8. INTEGER-SIZE TERNARY IS ALWAYS TRUE (DE MORGAN BUG)
+-----------------------------------------------------------------
+Line 107:
+    const size_t number_size = (*c_str != '+' || *c_str != '-')
+                                ? strlen(c_str) : strlen(c_str)-1;
+
+A single character can never simultaneously be "not '+'" AND "not '-'"
+fail both conditions — `!=` of two different literals OR'd together is a
+tautology, this expression is TRUE for every possible input character.
+It should be `&&`, i.e. "if the first char is neither '+' nor '-', use the
+full length." As written it always takes the strlen(c_str) branch, never
+the -1 branch.
+
+In practice this specific case is unreachable anyway because the digit
+validation loop just above (line 98) already rejects any string containing
+'+' or '-' as "not a valid number" before this line runs (see bug #2 for
+why signed numbers die even earlier). But the expression itself is wrong
+regardless and should be fixed if the earlier sign-handling is fixed.
+
+
+9. pow(10, i-1) FOR INTEGER DIGIT WEIGHTING — PRECISION / OVERFLOW
+-----------------------------------------------------------------
+Line 117: `integer_result.value += pow(10, i-1) * (*c_str - '0');`
+
+Using floating-point pow() to compute decimal place values and adding the
+result into a uint64_t risks precision loss for large integers — double
+only has ~15-17 significant decimal digits, while uint64_t can represent
+values up to ~1.8x10^19. No overflow check exists if the input string
+represents a number larger than UINT64_MAX either.
+
+
+10. set_bit() IS UNUSED AND HAS THE SAME SHIFT-WIDTH BUG AS #4
+-----------------------------------------------------------------
+Lines 28-30:
+    static inline lucas_number set_bit(lucas_number value, uint8_t bit_pos, bool bool_val){
+        return lucas_number {value.value | (bool_val << bit_pos), value.is_int};
+    }
+
+Not called anywhere in this file. Also, `bool_val << bit_pos` shifts a bool
+(promoted to 32-bit int) by bit_pos BEFORE it's OR'd into the uint64_t
+value — if bit_pos >= 32 this is the same undefined-behavior shift-width
+issue as bug #4. Fix direction if kept: cast to uint64_t before shifting,
+e.g. `(uint64_t)bool_val << bit_pos`.
+
+
+SUMMARY
+-----------------------------------------------------------------
+- File does not compile as-is (2 syntax errors).
+- The inf/-inf/+0/-0/NaN handling is fully dead code (routing bug #1) and
+  additionally broken on every axis if it were reached: wrong strcmp
+  comparisons (#3), UB/off-by-one bit patterns (#4), and inverted
+  success/error flag (#5).
+- Any explicitly-signed input ("+5", "-5", "-3.14", ...) is rejected
+  outright due to the sign-loop bug (#2), independent of bug #1.
+- Decimal points are parsed but have zero effect on the computed value
+  (#6), and the final double is numerically truncated into the uint64_t
+  field rather than bit-copied (#7), so even a "successful" float parse
+  doesn't produce real IEEE-754 bits.
+- Minor correctness/UB issues: tautological ternary (#8), float-precision
+  integer accumulation (#9), unused/unsafe set_bit (#10).
