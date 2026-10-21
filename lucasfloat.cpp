@@ -83,7 +83,7 @@ ResultType make_lucas_number(char * c_str){
         for (char * num_check = c_str; *num_check != '\0'; num_check++) if ( !('0' >= *num_check && '9' <= num_check) ) return nothing_error;
     
         
-         
+                
 
     
 

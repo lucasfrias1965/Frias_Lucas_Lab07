@@ -1,0 +1,54 @@
+Objective: In this lab, you will implement string-based arithmetic operations in C++ without converting strings to built-in numeric types. You will practice parsing, validation, and manual arithmetic on numbers represented as strings. Specifically, you will check whether a given string is a valid double-precision number format, and then implement addition (and optionally, multiplication) between such numbers.
+
+ 
+
+What to turn in: Please provide a URL to your GitHub repository. If you are unable to push your code to GitHub, you may instead use KU GitLab, which works in a very similar way. Your repository must be private so that your work is not publicly searchable. Limit access to yourself, the course instructor, and the course GTAs. Make sure your GTA has access to review and grade your submission. 
+
+(In your repo, go to Settings → Collaborators (under "Access"), click Add people, type their email, choose the right match from the list, and confirm. They'll get an invitation email, and they get access once they accept it.)
+
+ 
+
+Grading:
+
+    A valid Makefile must be included in the repository. [5 points]
+    The program reads the test cases from the file. [5 points]
+    There are 30 test cases, and each one is 3 points. [90 points]
+
+(Grading is based on correct arithmetic results and input validation. Prompt wording and equivalent numeric formatting, such as 13 and 13.0, will not affect your grade.)
+
+Programming problem #1. Basic Calculator
+
+1. Read the candidate numbers from the file:
+
+Implement a function to load string-formatted numbers from a user-specified file, where each line in the file contains two such numbers. (Each line must contain exactly two whitespace-separated values. If a line contains fewer or more than two values, print an error message and continue to the next line.)
+
+Here are some samples:
+
+123 456
+
+123.456 +1
+
++123 -123
+
+... (there are thirty lines)
+
+2. Identify if a number is a valid double number:
+
+For each line in the file, check whether the string represents a valid double number. If both are valid, proceed to execute the subsequent functions. Otherwise, print a message indicating that the number is invalid and continue processing the next line.
+
+A valid double number follows the format (+|-)A(.B), where:
+
+    An optional '+' or '-' sign may appear at the beginning;
+
+    A sequence of digits follows, which may include leading zeros (these can be removed before calculation for simplicity);
+
+    An optional decimal point may appear; if it does, there must be at least one digit on both sides of it.
+
+Some valid double examples: 1, 1.0, +1.0, +0001.0, -0001.005
+
+Some invalid double examples: A, +-1, -5., -5.-5
+
+3. Perform addition between the parsed double numbers:
+If both numbers are valid, sum them up and print the result.
+
+Note: You must implement all functions from scratch without importing external libraries to validate whether a string is a valid double number. You are not allowed to convert the string to a double or use try-catch blocks for validation. Throughout the program, all double numbers must be maintained in string format, and arithmetic operations such as addition must also be performed without converting the values to double-precision format. (Standard C++ headers and string methods are allowed. You may use integers for individual digits, carry, borrow, and indices. You must not convert an entire operand into a numeric type.)
