@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdint.h>
-
+#include <stddef.h>
+#include <string.h>
+#include <cmath>
 
 typedef struct {
         uint64_t value;
@@ -8,10 +10,17 @@ typedef struct {
 } lucas_number;
 
 
+
+
 typedef struct {
-        lucas_float value;
+        lucas_number value;
         bool error;
 } ResultType;
+
+static inline lucas_number unpack_result_type(ResultType rt){
+    if (rt.error) exit(1); 
+    else return rt.value;
+}
 
 ResultType make_lucas_number(char * c_str){
     //make_lucas_float -> given a c_str, we will
@@ -74,17 +83,30 @@ ResultType make_lucas_number(char * c_str){
 
     if (string_seems_inty){
         //this is an integer validation/handling code let's parse it
-        //first, let's make sure all chars are '1' - '9'
+        //first, let's make sure all chars are '0' - '9'
 
 
         //holy hideous one liner -> basically, what this does is inits a pointer which we increment and validate that
         //only integer types are actually returned so we're gonna validate whether this is okay
     
-        for (char * num_check = c_str; *num_check != '\0'; num_check++) if ( !('0' >= *num_check && '9' <= num_check) ) return nothing_error;
+        for (char * num_check = c_str; *num_check != '\0'; num_check++) if ( !('0' >= *num_check && '9' <= *num_check) ) return nothing_error;
     
-        
-                
+        //okay so now we validated it's like at least a number
+        //so let's calculate it!!!
 
-    
+        //instead of manually incrementing through to get the size,
+        //we're gonna use strlen to get the len, and then account for
+        //if we have a + or - and remove 1 from that 
+         
+        const size_t number_size = (*c_str != '+' || *c_str != '-') ? strlen(c_str) : strlen(c_str)-1;
+        
+        //make our lucas number
+        lucas_number integer_result = {0, true};
+
+        for (size_t i = number_size; i >= 0; i--, c_str++) integer_result.value += pow (10, i) * (*c_str - '0');
+        
+        return ResultType{integer_result, false};
+
+    }    
 
 }
