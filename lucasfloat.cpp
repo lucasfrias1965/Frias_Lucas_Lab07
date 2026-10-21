@@ -4,6 +4,7 @@
 #include <string.h>
 #include <cmath>
 
+
 typedef struct {
         uint64_t value;
         bool is_int;
@@ -17,9 +18,15 @@ typedef struct {
         bool error;
 } ResultType;
 
+
+
 static inline lucas_number unpack_result_type(ResultType rt){
     if (rt.error){printf("ERR, could not unpack"); exit(1);}
     else return rt.value;
+}
+
+static inline lucas_number set_bit(lucas_number value, uint8_t bit_pos, bool bool_val){
+	return lucas_number {value.value | (bool_val << bit_pos), value.is_int};
 }
 
 ResultType make_lucas_number(char * c_str){
@@ -102,13 +109,93 @@ ResultType make_lucas_number(char * c_str){
         //make our lucas number
         lucas_number integer_result = {0, true};
 
+	//increment for every element in the size of our str (at least one long guarenteed)
+
        	for (size_t i = number_size; *c_str != '\0'; i--){
+		//okay so while we have no null terminator
+
 		integer_result.value += pow(10, i-1) * (*c_str - '0');
+		//increment our value by the power of the position (based on the size of the integer)
+		
+		//increment the char pointer by 1
 		c_str++;
 	}
 
         return ResultType{integer_result, false};
 
-    }    
+    }
+    else {
+	//this is our double IEEE 756 implementation
+	//basically, we are going to parse the string and have the data be a IEEE 754
+	//specifically, double precision floating point format
+	//i'm deriving all of this from this wikipedia article
+	//https://en.wikipedia.org/wiki/Double-precision_floating-point_format
+	lucas_number float_res = {0, false};
+
+	//this does NOT use a standard lib function. this is a modified version of 
+	//this code (stackoverflow.com/questions/43926665/converting-string-to-float-without-atof-in-c)
+	//which i modified for double precision
+
+	double res = 0, fact = 1;
+
+	//first, we have to do some sanity checks.
+	//if, for example, we have NaN or inf or - inf
+
+	if (strcmp(c_str, "inf") >= 0){
+		return lucas_number{2048 << 52 | 0 << 63, false};
+	}
+	if (strcmp(c_str, "-inf") >= 0){
+		return lucas_number{(2048 << 52) | 1 << 63, false};
+	}
+
+	if (strcmp(c_str, "+0"){
+		return lucas_number {0, false};
+	}
+	if (strcmp(c_str, "-0"){
+		return lucas_number {0, false};
+	}
+	if (strcmp(c_str, "NaN")){
+		//technically sNaN but makes no difference
+		return {2048 << 52 | 1};
+	}
+
+
+	//sneaky c stuff. if !is_positive i still wanna increment the c_str pointer
+	//because there MUST be a negative (and input is already sanitized so it's the only
+	//char that is '-'. however, yet still i need to increment the pointer past this.
+	//in a c if statement, if the first part is false the second doesn't run
+	//so this way i guarentee that the pointer is not increment.
+	//now, if the pointer IS increment, we also check if there's no value past the negative
+	//because - might technically pass as a number (we haven't checked all chars yet)
+	//so we do a double check there, to see if we should set the leading bit to 1. if so, the fact is -1
+	if (!is_positive && *(c_str++)) fact = - 1;
+
+	//this is aura, nullterm is 0 so it would be a false boolean
+	//i'm writing all my null term checks like this from now on
+	for (bool point_seen = 0; *c_str; c_str++){
+		//okay if the pointer is seen then it's true, and we continue
+		if (c_str == '.'){
+			//the point has been seen!!
+			point_seen = true;
+			continue;
+		}
+
+		//get the integer value and store it 
+		//
+		int num_part = *s - '0';
+
+		if (num_part >= 0 && num_part <= 9){
+			//if the point's been seen, then we divide the factor by 10 (it's the next point)
+			//so we go from 0.1 -> 0.01 -> 0.001
+			if (point_seen) fact /= 10.0f;
+			//append it onto the res, where we bump up the exponent part each time
+			res = res * 10.0f + (double) num_part;
+		}
+	}		
+	
+	float_res.value = res;
+	
+	return float_res;
+			
 
 }
