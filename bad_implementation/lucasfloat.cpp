@@ -38,17 +38,37 @@ ResultType make_lucas_number(char * c_str){
     ResultType nothing_error = {lucas_number{0,0}, true};
     //quick check
     if (*c_str == '\0') {printf("ERR: nullstr");return nothing_error;}
- 
+
+    //check the special IEEE-754 strings before any sign/digit validation,
+    //since they don't look like ordinary signed numbers at all
+    if (!strcmp(c_str, "inf")){
+        return ResultType {lucas_number{2047ULL << 52 | 0ULL << 63, false}, false};
+    }
+    if (!strcmp(c_str, "-inf")){
+        return ResultType {lucas_number{(2047ULL << 52) | 1ULL << 63, false}, false};
+    }
+    if (!strcmp(c_str, "+0")){
+        return ResultType{ lucas_number {0, false}, false};
+    }
+    if (!strcmp(c_str, "-0")){
+        return ResultType{ lucas_number {0, false}, false};
+    }
+    if (!strcmp(c_str, "NaN")){
+        //technically sNaN but makes no difference
+        return ResultType{ lucas_number {2047ULL << 52 | 1ULL, false}, false};
+    }
+
     //the first thing we must do is get the sign!!
     //the sign is defined as the value that the string is in
     //it defaults to positive but to be negative MUST include
     //the - sign in the front. we also need to check the string
     //because we have to do crazy input validation
 
-    char * sign_check_ptr = c_str;
-    
-    bool is_positive = true;
  
+    char * sign_check_ptr = c_str;
+   
+    bool is_positive = true;
+    bool all_numbers = true; 
     //okay let's match the sign_check first char
     switch (*sign_check_ptr){
         case '+':
@@ -56,9 +76,16 @@ ResultType make_lucas_number(char * c_str){
         case '-':
             is_positive = false;
             //falls through here it doesn't matter
-        default:
-            break;    
+	default:
+		break;
     }
+    
+
+    //this is very important!! we have to increment the sign
+   //check ptr
+    sign_check_ptr++;
+
+
     //okay now that we've determined the sign, let's check
     //and see if we violate the basic rule of where the sign is
     //while we're iterating, we're also gonna do a count
@@ -79,15 +106,14 @@ ResultType make_lucas_number(char * c_str){
                 //other +
                 if (found_period){printf("ERR: more than one period in %s", c_str); return nothing_error;}
                 else found_period = true;
-            default:
-                continue;                
+		break;
         }
     }
 
     //is the string interger-esque? we can't know that it IS an
     //integer, but this decides what path we should take
     bool string_seems_inty = !found_period;
-    if (string_seems_inty){
+    if (string_seems_inty && all_numbers){
         //this is an integer validation/handling code let's parse it
         //first, let's make sure all chars are '0' - '9'
 
@@ -95,7 +121,7 @@ ResultType make_lucas_number(char * c_str){
         //holy hideous one liner -> basically, what this does is inits a pointer which we increment and validate that
         //only integer types are actually returned so we're gonna validate whether this is okay
     
-        for (char * num_check = c_str; *num_check != '\0'; num_check++) if ( !('0' <= *num_check && '9' >= *num_check) ) { printf("ERR: char %c is not a valid number", *num_check);return nothing_error;}
+        for (char * num_check = (*c_str == '+' || *c_str == '-') ? c_str + 1 : c_str; *num_check != '\0'; num_check++) if ( !('0' <= *num_check && '9' >= *num_check) ) { printf("ERR: char %c is not a valid number", *num_check);return nothing_error;}
     
         //okay so now we validated it's like at least a number
         //so let's calculate it!!!
@@ -104,10 +130,13 @@ ResultType make_lucas_number(char * c_str){
         //we're gonna use strlen to get the len, and then account for
         //if we have a + or - and remove 1 from that 
          
-        const size_t number_size = (*c_str != '+' || *c_str != '-') ? strlen(c_str) : strlen(c_str)-1;
+        const size_t number_size = (*c_str != '+' &&  *c_str != '-') ? strlen(c_str) : strlen(c_str)-1;
 
         //make our lucas number
         lucas_number integer_result = {0, true};
+
+	//skip the sign char itself, it's not a digit to accumulate
+	if (*c_str == '+' || *c_str == '-') c_str++;
 
 	//increment for every element in the size of our str (at least one long guarenteed)
 
@@ -116,7 +145,7 @@ ResultType make_lucas_number(char * c_str){
 
 		integer_result.value += pow(10, i-1) * (*c_str - '0');
 		//increment our value by the power of the position (based on the size of the integer)
-		
+
 		//increment the char pointer by 1
 		c_str++;
 	}
@@ -138,64 +167,49 @@ ResultType make_lucas_number(char * c_str){
 
 	double res = 0, fact = 1;
 
-	//first, we have to do some sanity checks.
-	//if, for example, we have NaN or inf or - inf
+	//the special-value strings (inf/-inf/+0/-0/NaN) are already handled at
+	//the top of the function, before we ever get here
 
-	if (strcmp(c_str, "inf") >= 0){
-		return lucas_number{2048 << 52 | 0 << 63, false};
-	}
-	if (strcmp(c_str, "-inf") >= 0){
-		return lucas_number{(2048 << 52) | 1 << 63, false};
-	}
-
-	if (strcmp(c_str, "+0"){
-		return lucas_number {0, false};
-	}
-	if (strcmp(c_str, "-0"){
-		return lucas_number {0, false};
-	}
-	if (strcmp(c_str, "NaN")){
-		//technically sNaN but makes no difference
-		return {2048 << 52 | 1};
-	}
-
-
-	//sneaky c stuff. if !is_positive i still wanna increment the c_str pointer
-	//because there MUST be a negative (and input is already sanitized so it's the only
-	//char that is '-'. however, yet still i need to increment the pointer past this.
-	//in a c if statement, if the first part is false the second doesn't run
-	//so this way i guarentee that the pointer is not increment.
-	//now, if the pointer IS increment, we also check if there's no value past the negative
-	//because - might technically pass as a number (we haven't checked all chars yet)
-	//so we do a double check there, to see if we should set the leading bit to 1. if so, the fact is -1
-	if (!is_positive && *(c_str++)) fact = - 1;
+	//skip the sign char itself; is_positive was already determined earlier,
+	//sign gets applied to res directly at the end instead of being smuggled
+	//through fact (fact is only the fractional place-value scale now)
+	if (!is_positive) c_str++;
 
 	//this is aura, nullterm is 0 so it would be a false boolean
 	//i'm writing all my null term checks like this from now on
 	for (bool point_seen = 0; *c_str; c_str++){
 		//okay if the pointer is seen then it's true, and we continue
-		if (c_str == '.'){
+		if (*c_str == '.'){
 			//the point has been seen!!
 			point_seen = true;
 			continue;
 		}
 
-		//get the integer value and store it 
+		//get the integer value and store it
 		//
-		int num_part = *s - '0';
+		int num_part = *c_str - '0';
 
 		if (num_part >= 0 && num_part <= 9){
-			//if the point's been seen, then we divide the factor by 10 (it's the next point)
-			//so we go from 0.1 -> 0.01 -> 0.001
-			if (point_seen) fact /= 10.0f;
-			//append it onto the res, where we bump up the exponent part each time
-			res = res * 10.0f + (double) num_part;
+			if (point_seen){
+				//if the point's been seen, divide the factor by 10 (it's the next
+				//decimal place) and scale this digit by it: 0.1 -> 0.01 -> 0.001
+				fact /= 10.0f;
+				res += num_part * fact;
+			} else {
+				//no point yet, so we're still in the integer part: shift res up
+				//and append the digit
+				res = res * 10.0f + (double) num_part;
+			}
 		}
-	}		
-	
-	float_res.value = res;
-	
-	return float_res;
-			
+	}
+
+	if (!is_positive) res = -res;
+
+	//bit-copy the IEEE-754 double into the uint64_t field, not a numeric cast
+	memcpy(&float_res.value, &res, sizeof(double));
+
+	return ResultType{float_res, false};
+
+    }
 
 }
