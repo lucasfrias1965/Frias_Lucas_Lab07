@@ -4,6 +4,40 @@
 #include <stdint.h>
 
 
+bool check_place_consistency(char * a){
+	char * a_check = a + 1;
+	bool found_period = false;
+
+	//check for weird edge cases
+	if (a[0] == '.'){printf("ERR: can't start with .");return false;}
+	if ( (a[0] == '+' || a[0] == '-') && !(a[1])){ printf("ERR: just a lone symbol is not a number"); return false;}
+	char last_char = a[0];
+	while (*a_check){
+		switch (*a_check){
+			case '+':
+				printf("ERR: + occurs in weird place "); return false;
+			case '-':
+				printf("ERR: - occurs in weird place "); return false;
+			case '.':
+				if (found_period){
+					printf("ERROR: more than one period"); return false;
+				}
+				else {
+					found_period = true;
+				}
+		}
+		last_char = *a_check;
+		a_check++;
+	}
+	
+	//also checks for 5.
+
+	if (last_char == '.'){printf("ERR: cannot end with a .");return false;}
+
+	return true;
+}
+
+
 void eval_statement(char * statement){
 	//first we need to cut the statement
 	//into two strings.
@@ -23,7 +57,7 @@ void eval_statement(char * statement){
 		if (*st_check == '.') continue;
 		if (*st_check == '+') continue;
 		if (*st_check == '-') continue;
-		printf("ERROR: not valid");
+		printf("ERROR: not valid, can't do math with %s", statement);
 		return;
 	}
 
@@ -61,33 +95,11 @@ void eval_statement(char * statement){
 	//and nowhere else, so let's increment &a+1
 	//additionally, should be one period so we'll keep 
 	//track of the periods we find
-	char * a_check = a + 1;
-	bool found_period = false;
-	
-	//quick gotcha -> make sure we don't have a .23 or something
-	if (a[0] == '.'){printf("ERR: can't start with .");return;}
-	char last_char = a[0];
-	while (*a_check){
-		switch (*a_check){
-			case '+':
-				printf("ERR: + occurs in weird place "); return;
-			case '-':
-				printf("ERR: - occurs in weird place "); return;
-			case '.':
-				if (found_period){
-					printf("ERROR: more than one period"); return;
-				}
-				else {
-					found_period = true;
-				}
-		}
-		last_char = *a_check;
-		a_check++;
-	}
-	
-	//also checks for 5.
 
-	if (last_char == '.'){printf("ERR: cannot end with a .");return;}
+	bool a_ok = check_place_consistency(a);
+	if (!a_ok) return;
+	bool b_ok = check_place_consistency(b);
+	if (!b_ok) return;
 
 		
 	
