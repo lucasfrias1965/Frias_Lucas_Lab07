@@ -344,22 +344,28 @@ void eval_statement(int line_number, const char * statement){
 		}
 	}
 
-	//buffer_result holds the magnitude digits in reverse order; flip it
-	//back around and hand the signed string to trim_result, which strips
-	//the padding zeros and decides whether the sign survives
+	//set our buff i minus 1
 	std::string raw_magnitude;
 	for (int i = buff_i - 1; i >= 0; i--) raw_magnitude += buffer_result[i];
 
 	std::string signed_result = (result_is_negative ? "-" : "") + raw_magnitude;
 
+	//print everything as a little cstr
 	printf("%s + %s = %s\n", a_str.c_str(), b_str.c_str(), trim_result(signed_result).c_str());
 }
 
 
 int main(){
-	FILE * fptr = fopen("test.txt", "r");
+	char filename[256] = {0};
+	//please dont string overflow this!!!
+	printf("Please input a file: ");
+	scanf("%s", &filename);
+	
+	FILE * fptr = fopen(filename, "r");
+
 	if (!fptr){
-		printf("ERROR: could not open test.txt\n");
+		//freak out!
+		printf("ERROR: could not open file\n");
 		return 1;
 	}
 
